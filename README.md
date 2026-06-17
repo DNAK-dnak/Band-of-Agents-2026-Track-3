@@ -98,7 +98,9 @@ python start_all.py
 
 ## Team
 
-- Anh Khoa Đoàn Nguyễn ([@DNAK-dnak](https://github.com/DNAK-dnak))
+- Khoa Đoàn Nguyễn Anh ([@DNAK-dnak](https://github.com/DNAK-dnak))
+- Khải Phan Văn
+- Vy Lê Tường
 
 ## License
 
