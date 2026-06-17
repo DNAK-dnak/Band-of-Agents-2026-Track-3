@@ -1,4 +1,4 @@
-band-sdk[langgraph]
-langchain-openai
+httpx
+pyyaml
 python-dotenv
-thenvoi
+langchain-openai

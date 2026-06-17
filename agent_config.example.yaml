@@ -1,0 +1,15 @@
+policy-analyst:
+  agent_id: "your-policy-agent-uuid"
+  api_key: "your-policy-agent-api-key"
+
+risk-analyst:
+  agent_id: "your-risk-agent-uuid"
+  api_key: "your-risk-agent-api-key"
+
+legal-reviewer:
+  agent_id: "your-legal-agent-uuid"
+  api_key: "your-legal-agent-api-key"
+
+decision-maker:
+  agent_id: "your-decision-agent-uuid"
+  api_key: "your-decision-agent-api-key"

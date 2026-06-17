@@ -30,7 +30,7 @@ AGENTS = [
     {"name": "Risk Agent",     "script": "risk_agent.py",         "color": "\033[93m"},   # yellow
     {"name": "Legal Agent",    "script": "legal_agent.py",        "color": "\033[95m"},   # magenta
     {"name": "Decision Agent", "script": "decision_agent.py",     "color": "\033[92m"},   # green
-    {"name": "Coordinator",    "script": "intake_coordinator.py", "color": "\033[97m"},   # white
+    {"name": "Coordinator",    "script": "pipeline_ros2.py",      "color": "\033[97m"},   # white
 ]
 
 RESET = "\033[0m"
@@ -43,13 +43,6 @@ def start_all():
     logger.info("║  Financial Compliance Pipeline — Launcher    ║")
     logger.info("╠══════════════════════════════════════════════╣")
 
-    # Run fix_stuck_messages.py first to clear stuck states
-    fix_script = "fix_stuck_messages.py"
-    if os.path.exists(fix_script):
-        logger.info("Running fix_stuck_messages.py to clear any stuck messages...")
-        subprocess.run([sys.executable, fix_script])
-        logger.info("╠══════════════════════════════════════════════╣")
-
     for agent in AGENTS:
         script = agent["script"]
         name = agent["name"]
@@ -60,7 +53,7 @@ def start_all():
             continue
 
         proc = subprocess.Popen(
-            [sys.executable, "-u", script],
+            [sys.executable, script],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
@@ -86,12 +79,18 @@ def start_all():
         try:
             while processes:
                 # Check if any process has died
-                for p in processes:
+                for p in list(processes):
                     ret = p["proc"].poll()
                     if ret is not None:
                         logger.warning(
                             f"{p['color']}[{p['name']}]{RESET} exited with code {ret}"
                         )
+                        processes.remove(p)
+                        if p["proc"].stdout:
+                            try:
+                                sel.unregister(p["proc"].stdout)
+                            except KeyError:
+                                pass
 
                 events = sel.select(timeout=1)
                 for key, _ in events:
