@@ -46,6 +46,9 @@ app.add_middleware(
 
 # ── CSV helpers ─────────────────────────────────────────────────────────────
 def _ensure_tx_csv():
+    parent = os.path.dirname(CSV_PATH)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     if not os.path.exists(CSV_PATH):
         with open(CSV_PATH, "w", newline="") as f:
             csv.DictWriter(f, fieldnames=TX_FIELDNAMES).writeheader()

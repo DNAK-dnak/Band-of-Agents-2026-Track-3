@@ -79,6 +79,9 @@ def reset_csvs():
         (RESULTS_PATH,      ["id","description","verdict","room_id","completed_at"]),
     ]
     for path, fields in specs:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w", newline="") as f:
             csv.DictWriter(f, fieldnames=fields).writeheader()
