@@ -22,6 +22,9 @@ import shutil
 
 LOCK_FILE = ".pipeline.lock"
 
+CSV_PATH = os.getenv("CSV_PATH", "transactions.csv")
+RESULTS_PATH = os.getenv("RESULTS_PATH", "results.csv")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(message)s",
@@ -72,8 +75,8 @@ def clear_lock():
 def reset_csvs():
     """Wipe transactions and results CSVs back to headers only."""
     specs = [
-        ("transactions.csv", ["id","user_id","status","description","room_id","verdict","submitted_at","completed_at"]),
-        ("results.csv",      ["id","description","verdict","room_id","completed_at"]),
+        (CSV_PATH, ["id","user_id","status","description","room_id","verdict","submitted_at","completed_at"]),
+        (RESULTS_PATH,      ["id","description","verdict","room_id","completed_at"]),
     ]
     for path, fields in specs:
         tmp = path + ".tmp"

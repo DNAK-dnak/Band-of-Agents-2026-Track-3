@@ -45,9 +45,9 @@ AGENT_API     = f"{BAND_BASE_URL}/agent"
 # ══════════════════════════════════════════════════════════════
 # Configuration
 # ══════════════════════════════════════════════════════════════
-CSV_PATH           = "transactions.csv"
-RESULTS_PATH       = "results.csv"
-AGENT_CONFIG_PATH  = "agent_config.yaml"
+CSV_PATH           = os.getenv("CSV_PATH", "transactions.csv")
+RESULTS_PATH       = os.getenv("RESULTS_PATH", "results.csv")
+AGENT_CONFIG_PATH  = os.getenv("AGENT_CONFIG_PATH", "agent_config.yaml")
 
 AGENT_WARMUP_DELAY     = 15   # initial warmup only (once at startup)
 RESULT_TIMEOUT         = 600

@@ -24,8 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ── Config ─────────────────────────────────────────────────────────────────
-CSV_PATH     = "transactions.csv"
-RESULTS_PATH = "results.csv"
+CSV_PATH     = os.getenv("CSV_PATH", "transactions.csv")
+RESULTS_PATH = os.getenv("RESULTS_PATH", "results.csv")
 STATIC_DIR   = "static"
 
 # Seed users shown in UI even before any transactions are submitted
