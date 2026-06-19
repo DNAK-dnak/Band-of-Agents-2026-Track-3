@@ -1,57 +1,8 @@
 import asyncio
-import logging
-import os
-import random
-import time
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.outputs import ChatResult
-from langgraph.checkpoint.memory import InMemorySaver
-from thenvoi import Agent
-from thenvoi.adapters import LangGraphAdapter
-from thenvoi.config import load_agent_config
+from agent_helper import run_agent, get_agent_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_agent_logger("PolicyAgent")
 
-# ── Retry wrapper ──────────────────────────────────────────────
-BUSY_PHRASES = ("model is busy", "please try again later", "503", "overloaded",
-                "rate limit", "too many requests")
-
-def _is_busy(exc: Exception) -> bool:
-    return any(p in str(exc).lower() for p in BUSY_PHRASES)
-
-class RetryingChatOpenAI(ChatOpenAI):
-    max_busy_retries: int = 6
-    base_delay: float = 10.0
-    max_delay: float = 120.0
-
-    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
-        for attempt in range(self.max_busy_retries + 1):
-            try:
-                return await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
-            except Exception as exc:
-                if _is_busy(exc) and attempt < self.max_busy_retries:
-                    delay = min(self.base_delay * (2 ** attempt), self.max_delay)
-                    delay += random.uniform(-2, 2)
-                    logger.warning(f"[Policy] Model busy (attempt {attempt+1}/{self.max_busy_retries}), retry in {delay:.1f}s")
-                    await asyncio.sleep(max(delay, 1.0))
-                else:
-                    raise
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
-        for attempt in range(self.max_busy_retries + 1):
-            try:
-                return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-            except Exception as exc:
-                if _is_busy(exc) and attempt < self.max_busy_retries:
-                    delay = min(self.base_delay * (2 ** attempt), self.max_delay)
-                    logger.warning(f"[Policy] Model busy (attempt {attempt+1}/{self.max_busy_retries}), retry in {delay:.1f}s")
-                    time.sleep(max(delay, 1.0))
-                else:
-                    raise
-
-# ── System prompt ──────────────────────────────────────────────
 SYSTEM_PROMPT = """You are the Policy Agent in a financial compliance pipeline.
 
 === IDENTITY ===
@@ -97,22 +48,7 @@ Do NOT re-process old transactions or repeat past assessments.
 """
 
 async def main():
-    load_dotenv()
-    adapter = LangGraphAdapter(
-        llm=RetryingChatOpenAI(
-            model="Qwen/Qwen3.5-9B",
-            base_url="https://api.featherless.ai/v1",
-            api_key=os.getenv("FEATHERLESS_API_KEY"),
-            temperature=0.3,
-            model_kwargs={"tool_choice": "required"},
-        ),
-        checkpointer=InMemorySaver(),
-        custom_section=SYSTEM_PROMPT,
-    )
-    agent_id, api_key = load_agent_config("policy-analyst")
-    agent = Agent.create(adapter=adapter, agent_id=agent_id, api_key=api_key)
-    logger.info("Policy Agent is running! Press Ctrl+C to stop.")
-    await agent.run()
+    await run_agent("policy-analyst", SYSTEM_PROMPT, logger, allowed_senders=["decision-maker"])
 
 if __name__ == "__main__":
     asyncio.run(main())

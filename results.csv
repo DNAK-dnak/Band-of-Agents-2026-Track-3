@@ -1,2 +1,21 @@
 id,description,verdict,room_id,completed_at
-3,"$9,800 cash deposit into a personal checking account. The customer has made three similar deposits o...",ESCALATE,28329193-9981-4ace-8d4c-64ae6133d2c9,2026-06-17T03:43:12.113021+00:00
+1,"$5,000 domestic bank transfer from Johnson & Smith LLC (verified business, 8 years operating history...",AUTO-APPROVE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:45:07.456023+00:00
+2,"$450,000 international wire transfer from newly formed entity 'Apex Global Holdings' in Cyprus to a ...",ENHANCED REVIEW,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:48:33.491605+00:00
+3,"$9,800 cash deposit into a personal checking account. The customer has made three similar deposits o...",ESCALATE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:50:04.827950+00:00
+4,$12.50 POS debit card transaction at 'Starbucks #4921'. Account holder has regular daily transaction...,ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:51:45.185885+00:00
+5,"$15,000 peer-to-peer transfer via mobile payment app. The sender's account was accessed from a new I...",AUTO-APPROVE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:52:34.313536+00:00
+6,"$2,200 ACH payment from Riverside Dental Group to their landlord Greenfield Properties LLC for month...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:53:53.695343+00:00
+7,"$75,000 wire transfer from a high-net-worth individual to an offshore private bank in Panama. The cl...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:54:21.751700+00:00
+8,$320 online purchase at 'Amazon.com'. Cardholder's IP address matches their registered billing addre...,ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:56:11.015186+00:00
+9,"$49,500 cash deposit split across two branches on the same day — $24,800 at a downtown location and ...",AUTO-APPROVE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-18T23:56:39.039318+00:00
+10,"$1,200 ATM withdrawal attempted in Lagos, Nigeria, 45 minutes after a $600 ATM withdrawal was made i...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:15:13.479193+00:00
+11,$88.40 grocery store purchase at 'Whole Foods Market #1132'. Transaction made during typical shoppin...,ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:16:03.349643+00:00
+12,"$500,000 real estate wire from escrow company First National Title to a seller's attorney trust acco...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:17:01.922375+00:00
+13,"$3,400 international wire to a remittance service in Mexico. Sender is a verified construction worke...",AUTO-APPROVE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:17:39.228817+00:00
+14,"14 consecutive declined card attempts at an online electronics retailer within 8 minutes, each using...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:18:58.867106+00:00
+15,"$1,050 monthly transfer from personal checking to a linked savings account at the same institution. ...",DECLINE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:19:27.357911+00:00
+16,"$22,000 wire transfer from a nonprofit 501(c)(3) organization to an unregistered overseas entity. Th...",ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:20:46.774481+00:00
+17,"$6,700 purchase at a luxury watch retailer paid via debit card. The cardholder's average monthly spe...",AUTO-APPROVE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:21:57.390668+00:00
+18,$4.99 streaming service subscription charge from 'Netflix'. Recurring monthly charge consistent with...,ESCALATE TO HUMAN,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:22:47.614595+00:00
+19,"$18,000 in gift card purchases across 6 retail locations within 90 minutes. Buyer paid cash at each ...",ENHANCED REVIEW,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:23:46.890726+00:00
+20,"$250,000 inbound SWIFT transfer to a newly opened business account from an unverified correspondent ...",ESCALATE,665ba7ff-0a74-4159-9355-54f2082071b7,2026-06-19T01:24:19.118035+00:00

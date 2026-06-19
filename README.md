@@ -4,6 +4,8 @@
 
 A multi-agent system that automates financial transaction compliance review using 4 specialized AI agents coordinated through [Band](https://www.band.ai/).
 
+🚀 **[Live Demo Web Dashboard](https://band-of-agents-2026-track-3-production.up.railway.app/)**
+
 ## How It Works
 
 ```
@@ -35,8 +37,8 @@ Each agent performs an independent assessment, then hands off to the next via @m
 ## Tech Stack
 
 - **[Band](https://www.band.ai/)** — Multi-agent coordination platform
-- **[Band SDK](https://pypi.org/project/band-sdk/)** (thenvoi) — LangGraph adapter for agent-to-platform communication
-- **[Featherless AI](https://featherless.ai/)** — Serverless LLM inference (Qwen models)
+- **Band Native REST API** — Direct HTTP/JSON integration for agent communication (using adaptive async polling loops for maximum stability)
+- **[Featherless AI](https://featherless.ai/)** — Serverless LLM inference (Qwen models via LangChain)
 - **Python 3.11+**
 
 ## Project Structure
@@ -46,8 +48,9 @@ Each agent performs an independent assessment, then hands off to the next via @m
 ├── risk_agent.py            # Agent 2: Risk analysis and scoring
 ├── legal_agent.py           # Agent 3: Legal framework review
 ├── decision_agent.py        # Agent 4: Final decision and audit trail
-├── intake_coordinator.py    # Auto-submits transactions from CSV
-├── start_all.py             # Launches all agents + coordinator
+├── agent_helper.py          # Core runner helper (defines REST tools & polling loop)
+├── pipeline_ros2.py         # Coordinator: Orchestrates room lifecycle and CSV flow
+├── start_all.py             # Launches all 4 agents + coordinator
 ├── fix_stuck_messages.py    # Utility: clears stuck message queues
 ├── transactions.csv         # Input: pending transactions
 ├── results.csv              # Output: verdicts and audit records
@@ -87,12 +90,12 @@ python start_all.py
 
 🚧 **Work in progress** — Hackathon project (June 12–19, 2026)
 
-- [x] 4 agents connected to Band via SDK
+- [x] 4 agents connected to Band via Native REST API
 - [x] Linear pipeline with @mention handoffs
 - [x] Thought events for audit trail transparency
 - [x] Automated transaction intake from CSV
 - [x] One-command launcher (start_all.py)
-- [ ] Multi-run stability in same room
+- [x] Multi-run stability in same room (achieved by native REST transition)
 - [ ] Dynamic specialist recruitment (Level 4)
 - [ ] Sub-room delegation for sensitive findings (Level 5)
 
@@ -105,3 +108,4 @@ python start_all.py
 ## License
 
 MIT
+Apache 2.0

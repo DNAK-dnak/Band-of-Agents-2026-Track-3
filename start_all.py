@@ -17,6 +17,13 @@ import sys
 import os
 import time
 import logging
+import csv
+import shutil
+
+LOCK_FILE = ".pipeline.lock"
+
+CSV_PATH = os.getenv("CSV_PATH", "transactions.csv")
+RESULTS_PATH = os.getenv("RESULTS_PATH", "results.csv")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,10 +37,53 @@ AGENTS = [
     {"name": "Risk Agent",     "script": "risk_agent.py",         "color": "\033[93m"},   # yellow
     {"name": "Legal Agent",    "script": "legal_agent.py",        "color": "\033[95m"},   # magenta
     {"name": "Decision Agent", "script": "decision_agent.py",     "color": "\033[92m"},   # green
-    {"name": "Coordinator",    "script": "intake_coordinator.py", "color": "\033[97m"},   # white
+    {"name": "Coordinator",    "script": "pipeline_ros2.py",      "color": "\033[97m"},   # white
+    {"name": "Web Dashboard",  "script": "app.py",                "color": "\033[94m"},   # blue
 ]
 
 RESET = "\033[0m"
+
+
+def check_lock():
+    """Abort if another instance is already running."""
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE) as f:
+            old_pid = f.read().strip()
+        # Check if that PID is still alive
+        try:
+            os.kill(int(old_pid), 0)
+            print(f"\n[ERROR] Pipeline already running (PID {old_pid}).")
+            print("        Run: kill " + old_pid + " or: pkill -f start_all.py")
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            # Stale lock — old process is dead
+            os.remove(LOCK_FILE)
+
+
+def write_lock():
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def clear_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def reset_csvs():
+    """Wipe transactions and results CSVs back to headers only."""
+    specs = [
+        (CSV_PATH, ["id","user_id","status","description","room_id","verdict","submitted_at","completed_at"]),
+        (RESULTS_PATH,      ["id","description","verdict","room_id","completed_at"]),
+    ]
+    for path, fields in specs:
+        tmp = path + ".tmp"
+        with open(tmp, "w", newline="") as f:
+            csv.DictWriter(f, fieldnames=fields).writeheader()
+        shutil.move(tmp, path)
+    print("  ✓ CSVs reset (transactions + results)")
 
 
 def start_all():
@@ -42,13 +92,6 @@ def start_all():
     logger.info("╔══════════════════════════════════════════════╗")
     logger.info("║  Financial Compliance Pipeline — Launcher    ║")
     logger.info("╠══════════════════════════════════════════════╣")
-
-    # Run fix_stuck_messages.py first to clear stuck states
-    fix_script = "fix_stuck_messages.py"
-    if os.path.exists(fix_script):
-        logger.info("Running fix_stuck_messages.py to clear any stuck messages...")
-        subprocess.run([sys.executable, fix_script])
-        logger.info("╠══════════════════════════════════════════════╣")
 
     for agent in AGENTS:
         script = agent["script"]
@@ -60,7 +103,7 @@ def start_all():
             continue
 
         proc = subprocess.Popen(
-            [sys.executable, "-u", script],
+            [sys.executable, script],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
@@ -86,12 +129,18 @@ def start_all():
         try:
             while processes:
                 # Check if any process has died
-                for p in processes:
+                for p in list(processes):
                     ret = p["proc"].poll()
                     if ret is not None:
                         logger.warning(
                             f"{p['color']}[{p['name']}]{RESET} exited with code {ret}"
                         )
+                        processes.remove(p)
+                        if p["proc"].stdout:
+                            try:
+                                sel.unregister(p["proc"].stdout)
+                            except KeyError:
+                                pass
 
                 events = sel.select(timeout=1)
                 for key, _ in events:
@@ -127,4 +176,28 @@ def start_all():
 
 
 if __name__ == "__main__":
-    start_all()
+    import argparse
+
+    # Auto-generate agent_config.yaml on the fly if AGENT_CONFIG_YAML environment variable is set
+    config_yaml_content = os.getenv("AGENT_CONFIG_YAML")
+    if config_yaml_content:
+        print("  Generating agent_config.yaml from AGENT_CONFIG_YAML environment variable...")
+        with open("agent_config.yaml", "w") as f:
+            f.write(config_yaml_content)
+
+    parser = argparse.ArgumentParser(description="Financial Compliance Pipeline Launcher")
+    parser.add_argument("--reset", action="store_true",
+                        help="Clear transactions.csv and results.csv before starting")
+    args = parser.parse_args()
+
+    check_lock()   # Abort if already running
+
+    if args.reset:
+        print("\n  [--reset] Clearing CSVs...")
+        reset_csvs()
+
+    write_lock()   # Claim the lock
+    try:
+        start_all()
+    finally:
+        clear_lock()
