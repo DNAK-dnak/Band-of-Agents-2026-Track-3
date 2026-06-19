@@ -177,6 +177,14 @@ def start_all():
 
 if __name__ == "__main__":
     import argparse
+
+    # Auto-generate agent_config.yaml on the fly if AGENT_CONFIG_YAML environment variable is set
+    config_yaml_content = os.getenv("AGENT_CONFIG_YAML")
+    if config_yaml_content:
+        print("  Generating agent_config.yaml from AGENT_CONFIG_YAML environment variable...")
+        with open("agent_config.yaml", "w") as f:
+            f.write(config_yaml_content)
+
     parser = argparse.ArgumentParser(description="Financial Compliance Pipeline Launcher")
     parser.add_argument("--reset", action="store_true",
                         help="Clear transactions.csv and results.csv before starting")
