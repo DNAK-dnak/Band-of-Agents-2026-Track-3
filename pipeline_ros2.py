@@ -49,15 +49,16 @@ CSV_PATH           = "transactions.csv"
 RESULTS_PATH       = "results.csv"
 AGENT_CONFIG_PATH  = "agent_config.yaml"
 
-AGENT_WARMUP_DELAY     = 15
+AGENT_WARMUP_DELAY     = 15   # initial warmup only (once at startup)
 RESULT_TIMEOUT         = 600
 STALL_DETECT_INTERVAL  = 180
 MAX_REPINGS            = 1
-DELAY_BETWEEN_TX       = 20
-CSV_POLL_INTERVAL      = 20
+DELAY_BETWEEN_TX       = 5    # short cooldown — no room teardown needed
+CSV_POLL_INTERVAL      = 8
 
 POLL_FAST   = 8
 POLL_SLOW   = 20
+RETRY_DELAY = 30   # seconds to wait before retrying a failed send
 
 COORDINATOR_KEY = "decision-maker"
 
@@ -362,6 +363,7 @@ def write_result(tx_id, description, verdict, room_id):
 async def decision_subscriber_node(
     client, headers, agent_ids: dict,
     decision_outbox: Topic, tx_msg: TransactionMsg,
+    seen_ids: set = None,   # unused — kept for API compat
 ):
     decision_id = agent_ids["decision-maker"]
     room_id     = tx_msg.room_id
@@ -374,13 +376,19 @@ async def decision_subscriber_node(
     legal_api_key = configs["legal-reviewer"]["api_key"]
     legal_headers = {"X-API-Key": legal_api_key}
 
+    # WATERMARK: snapshot the room using legal_headers (same key used for polling)
+    # so we only see messages posted AFTER this transaction was submitted
+    msgs_before = await get_messages(client, legal_headers, room_id)
+    watermark   = frozenset(m.get("id") for m in msgs_before if m.get("id"))
+    logger.info(f"  [Subscriber] Watermark={len(watermark)} existing msgs — will ignore these")
+
     start        = asyncio.get_event_loop().time()
-    seen_ids: set[str] = set()
+    seen_ids     = set(watermark)   # start seen from watermark so loop skips old msgs
     last_new     = asyncio.get_event_loop().time()
     repings      = 0
     poll_interval = POLL_SLOW
 
-    logger.info(f"  [Subscriber] Listening — room {room_id}")
+    logger.info(f"  [Subscriber] Listening — room {room_id[:8]}… | tx_id={tx_id}")
 
     while not _shutdown_event.is_set():
         elapsed = asyncio.get_event_loop().time() - start
@@ -411,8 +419,9 @@ async def decision_subscriber_node(
         else:
             poll_interval = POLL_SLOW
 
-        # ── Verdict scan: check text, task, AND thought messages ──
-        for msg in msgs:
+        # ── Verdict scan: ONLY new messages (NOT in the pre-existing watermark) ──
+        new_msgs = [m for m in msgs if m.get("id") not in watermark]
+        for msg in new_msgs:
             msg_type = msg.get("message_type", "")
             content  = msg.get("content", "")
 
@@ -447,9 +456,9 @@ async def decision_subscriber_node(
                 return
             repings += 1
 
-            # Find last agent that responded → ping the NEXT one
+            # Find last agent that responded → ping the NEXT one (only from new messages)
             last_agent = None
-            for msg in reversed(msgs):
+            for msg in reversed(new_msgs):
                 sender_name = (msg.get("sender", {}).get("name", "") or "").lower()
                 if "policy" in sender_name:
                     last_agent = "policy-analyst"
@@ -479,21 +488,53 @@ async def decision_subscriber_node(
                 target_id = agent_ids[next_agent]
                 logger.warning(f"  ⚠ Stall {int(silence)}s — re-ping #{repings} → {next_agent}")
                 await send_message(client, headers, room_id,
-                    f"[RE-PING] Continue the compliance review for: {tx_msg.description[:200]}", target_id)
+                    f"[TX#{tx_id}][RE-PING] Continue the compliance review for: {tx_msg.description[:200]}", target_id)
                 last_new = asyncio.get_event_loop().time()
                 poll_interval = POLL_FAST
 
         current = len(seen_ids)
         mins, secs = int(elapsed // 60), int(elapsed % 60)
-        logger.info(f"  ⏳ {mins}m{secs}s | {current} msgs | poll={poll_interval}s | {repings} re-pings")
+        logger.info(f"  ⏳ {mins}m{secs}s | {current} msgs seen | {len(new_msgs)} new | poll={poll_interval}s | {repings} re-pings")
         await asyncio.sleep(poll_interval)
 
 
 # ══════════════════════════════════════════════════════════════
-# Main coordinator loop
+# Single-room coordinator — one room, all transactions
 # ══════════════════════════════════════════════════════════════
+async def setup_persistent_room(client, headers, configs: dict) -> tuple[str, dict]:
+    """Create ONE room and add all agents. Called once at startup."""
+    global _active_room_id
+
+    while not _shutdown_event.is_set():
+        room_id = await create_room(client, headers)
+        if not room_id:
+            logger.warning(f"  ⚠ Room creation failed — retrying in {RETRY_DELAY}s")
+            await asyncio.sleep(RETRY_DELAY)
+            continue
+
+        _active_room_id = room_id
+        agent_ids = await resolve_agent_ids(client, headers, configs, room_id)
+
+        for role_key, agent_id in agent_ids.items():
+            await add_participant(client, headers, room_id, agent_id, role_key)
+            await asyncio.sleep(1)
+
+        logger.info(f"  ⏳ Warmup {AGENT_WARMUP_DELAY}s… (one-time)")
+        await asyncio.sleep(AGENT_WARMUP_DELAY)
+        logger.info(f"  ✅ Persistent room ready: {room_id}")
+        return room_id, agent_ids
+
+    return "", {}
+
+
 async def transaction_publisher_node(client, headers, configs: dict, policy_inbox: Topic):
     decision_outbox = Topic("decision_outbox")
+
+    # ── One-time room setup ────────────────────────────────────
+    logger.info("  Setting up persistent room…")
+    room_id, agent_ids = await setup_persistent_room(client, headers, configs)
+    if not room_id:
+        return
 
     logger.info("  Watching transactions.csv…")
 
@@ -520,50 +561,30 @@ async def transaction_publisher_node(client, headers, configs: dict, policy_inbo
         logger.info(f"  {description[:80]}…")
         logger.info(f"{'═'*60}")
 
-        # Step 1: Create room
-        room_id = await create_room(client, headers)
-        if not room_id:
-            update_tx(tx_id, status="failed")
-            await asyncio.sleep(5)
-            continue
-
-        # Step 2: Peer Discovery
-        agent_ids = await resolve_agent_ids(client, headers, configs, room_id)
-
-        # Step 3: Add participants
-        for role_key, agent_id in agent_ids.items():
-            await add_participant(client, headers, room_id, agent_id, role_key)
-            await asyncio.sleep(1)
-
-        # Step 4: Warmup
-        logger.info(f"  ⏳ Warmup {AGENT_WARMUP_DELAY}s…")
-        await asyncio.sleep(AGENT_WARMUP_DELAY)
-
-        # Step 5: Submit to Policy Agent
+        # Submit to Policy Agent (no room creation — reuse persistent room)
         tx_msg = TransactionMsg(tx_id=tx_id, description=description, room_id=room_id)
         update_tx(tx_id, status="submitted", room_id=room_id,
                   submitted_at=datetime.now(timezone.utc).isoformat())
 
         ok = await send_message(
             client, headers, room_id,
-            f"Review this transaction: {description}",
+            f"[TX#{tx_id}] Review this transaction: {description}",
             agent_ids["policy-analyst"],
         )
         if not ok:
-            logger.error(f"  ✗ Failed to send to Policy Agent")
-            update_tx(tx_id, status="failed")
-            await destroy_room(client, headers, room_id)
-            await asyncio.sleep(5)
+            logger.error(f"  ✗ Failed to send #{tx_id} — will retry in {RETRY_DELAY}s")
+            update_tx(tx_id, status="pending", room_id="", submitted_at="")
+            await asyncio.sleep(RETRY_DELAY)
             continue
 
         await policy_inbox.publish(tx_msg)
         update_tx(tx_id, status="processing")
-        logger.info(f"  ✓ #{tx_id} submitted to pipeline")
+        logger.info(f"  ✓ #{tx_id} submitted to pipeline (room {room_id[:8]}…)")
 
-        # Step 6: Wait for verdict
+        # Wait for verdict (watermark taken inside subscriber with legal_headers)
         await decision_subscriber_node(client, headers, agent_ids, decision_outbox, tx_msg)
 
-        # Step 7: Collect verdict
+        # Collect verdict
         verdict_msg: VerdictMsg = await decision_outbox.subscribe(timeout=30)
 
         if verdict_msg is None:
@@ -578,17 +599,13 @@ async def transaction_publisher_node(client, headers, configs: dict, policy_inbo
                           completed_at=datetime.now(timezone.utc).isoformat())
                 write_result(tx_id, description, verdict_msg.verdict, room_id)
 
-        # Step 8: Teardown room
-        logger.info(f"  🗑  Tearing down room…")
-        await destroy_room(client, headers, room_id)
-
         v = verdict_msg.verdict if verdict_msg else "UNKNOWN"
         logger.info(f"  ✅ Transaction #{tx_id} → {v}")
         logger.info("")
 
-        # Step 9: Cooldown
-        if not _shutdown_event.is_set():
-            logger.info(f"  ⏳ Cooldown {DELAY_BETWEEN_TX}s…")
+        # Short cooldown — no room teardown needed
+        if not _shutdown_event.is_set() and pending[1:]:
+            logger.info(f"  ⏳ Next tx in {DELAY_BETWEEN_TX}s…")
             await asyncio.sleep(DELAY_BETWEEN_TX)
 
 
@@ -606,8 +623,8 @@ async def main():
     logger.info("╔═══════════════════════════════════════════════════════╗")
     logger.info("║  Financial Compliance Pipeline — Coordinator          ║")
     logger.info("╠═══════════════════════════════════════════════════════╣")
-    logger.info("║  Band: Peer Discovery + Participant Mgmt + Polling   ║")
-    logger.info(f"║  Timeout: {RESULT_TIMEOUT}s | Stall: {STALL_DETECT_INTERVAL}s | Warmup: {AGENT_WARMUP_DELAY}s         ║")
+    logger.info("║  Mode: SINGLE PERSISTENT ROOM (all transactions)     ║")
+    logger.info(f"║  Timeout: {RESULT_TIMEOUT}s | Stall: {STALL_DETECT_INTERVAL}s | Warmup: {AGENT_WARMUP_DELAY}s (once)    ║")
     logger.info(f"║  Poll: fast={POLL_FAST}s / slow={POLL_SLOW}s | Re-pings: max {MAX_REPINGS}        ║")
     logger.info("╚═══════════════════════════════════════════════════════╝\n")
 
@@ -626,7 +643,7 @@ async def main():
             await transaction_publisher_node(client, headers, configs, policy_inbox)
         finally:
             if _active_room_id:
-                logger.info(f"  🧹 Cleaning orphaned room…")
+                logger.info(f"  🧹 Tearing down persistent room {_active_room_id[:8]}…")
                 await destroy_room(client, headers, _active_room_id)
 
             try:

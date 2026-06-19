@@ -17,6 +17,10 @@ import sys
 import os
 import time
 import logging
+import csv
+import shutil
+
+LOCK_FILE = ".pipeline.lock"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,9 +35,52 @@ AGENTS = [
     {"name": "Legal Agent",    "script": "legal_agent.py",        "color": "\033[95m"},   # magenta
     {"name": "Decision Agent", "script": "decision_agent.py",     "color": "\033[92m"},   # green
     {"name": "Coordinator",    "script": "pipeline_ros2.py",      "color": "\033[97m"},   # white
+    {"name": "Web Dashboard",  "script": "app.py",                "color": "\033[94m"},   # blue
 ]
 
 RESET = "\033[0m"
+
+
+def check_lock():
+    """Abort if another instance is already running."""
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE) as f:
+            old_pid = f.read().strip()
+        # Check if that PID is still alive
+        try:
+            os.kill(int(old_pid), 0)
+            print(f"\n[ERROR] Pipeline already running (PID {old_pid}).")
+            print("        Run: kill " + old_pid + " or: pkill -f start_all.py")
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            # Stale lock — old process is dead
+            os.remove(LOCK_FILE)
+
+
+def write_lock():
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def clear_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def reset_csvs():
+    """Wipe transactions and results CSVs back to headers only."""
+    specs = [
+        ("transactions.csv", ["id","user_id","status","description","room_id","verdict","submitted_at","completed_at"]),
+        ("results.csv",      ["id","description","verdict","room_id","completed_at"]),
+    ]
+    for path, fields in specs:
+        tmp = path + ".tmp"
+        with open(tmp, "w", newline="") as f:
+            csv.DictWriter(f, fieldnames=fields).writeheader()
+        shutil.move(tmp, path)
+    print("  ✓ CSVs reset (transactions + results)")
 
 
 def start_all():
@@ -126,4 +173,20 @@ def start_all():
 
 
 if __name__ == "__main__":
-    start_all()
+    import argparse
+    parser = argparse.ArgumentParser(description="Financial Compliance Pipeline Launcher")
+    parser.add_argument("--reset", action="store_true",
+                        help="Clear transactions.csv and results.csv before starting")
+    args = parser.parse_args()
+
+    check_lock()   # Abort if already running
+
+    if args.reset:
+        print("\n  [--reset] Clearing CSVs...")
+        reset_csvs()
+
+    write_lock()   # Claim the lock
+    try:
+        start_all()
+    finally:
+        clear_lock()

@@ -2,3 +2,6 @@ httpx
 pyyaml
 python-dotenv
 langchain-openai
+fastapi
+uvicorn
+python-multipart
