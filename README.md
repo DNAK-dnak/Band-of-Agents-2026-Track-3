@@ -4,6 +4,8 @@
 
 A multi-agent system that automates financial transaction compliance review using 4 specialized AI agents coordinated through [Band](https://www.band.ai/).
 
+🚀 **[Live Demo Web Dashboard](https://band-of-agents-2026-track-3-production.up.railway.app/)**
+
 ## How It Works
 
 ```
@@ -106,3 +108,4 @@ python start_all.py
 ## License
 
 MIT
+Apache 2.0
